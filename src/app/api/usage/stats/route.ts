@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, errorResponse } from "@/lib/auth";
 import { getUserUsageStats } from "@/lib/usage";
-import { isValidTimezone } from "@/lib/utils";
+import { isValidTimezone, dateKeyInTz, buildCacheControl } from "@/lib/utils";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 const DEFAULT_DAYS = 7;
@@ -62,12 +62,14 @@ export async function GET(req: NextRequest) {
     tz = tzParam;
   }
 
-  // 5. Compute and return stats, with rate limit headers on success
+  // 5. Compute and return stats
   const stats = await getUserUsageStats(user.id, user.plan_tier, days, tz);
+
   return new Response(JSON.stringify(stats), {
     status: 200,
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": buildCacheControl(days, tz),
       "X-RateLimit-Limit": String(RATE_LIMIT.limit),
       "X-RateLimit-Remaining": String(rl.remaining),
       "X-RateLimit-Reset": String(Math.ceil(rl.resetAt / 1000)),

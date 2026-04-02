@@ -8,6 +8,7 @@ import {
   calcAvgDaily,
   dateKeyInTz,
   isValidTimezone,
+  buildCacheControl,
 } from "../utils";
 import type { DayStats } from "../usage";
 
@@ -225,5 +226,32 @@ describe("dateKeyInTz", () => {
     vi.setSystemTime(new Date("2026-04-01T23:00:00Z"));
     expect(dateKeyInTz(0, "Asia/Tokyo")).toBe("2026-04-02");
     expect(dateKeyInTz(0, "UTC")).toBe("2026-04-01");
+  });
+});
+
+// ─── buildCacheControl ────────────────────────────────────────────────────────
+
+describe("buildCacheControl", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("returns private short TTL when period includes today", () => {
+    vi.setSystemTime(new Date("2026-04-02T12:00:00Z"));
+    // days=7 always includes today
+    expect(buildCacheControl(7)).toBe("private, max-age=120, stale-while-revalidate=60");
+  });
+
+  it("returns private short TTL for days=1 (today only)", () => {
+    vi.setSystemTime(new Date("2026-04-02T12:00:00Z"));
+    expect(buildCacheControl(1)).toBe("private, max-age=120, stale-while-revalidate=60");
+  });
+
+  it("respects timezone when determining if today is included", () => {
+    // At 01:00 UTC Apr 2, New York is still Apr 1 — so days=1 in NY tz is yesterday (Apr 1),
+    // which IS today in NY, so still private
+    vi.setSystemTime(new Date("2026-04-02T01:00:00Z"));
+    expect(buildCacheControl(1, "America/New_York")).toBe(
+      "private, max-age=120, stale-while-revalidate=60"
+    );
   });
 });

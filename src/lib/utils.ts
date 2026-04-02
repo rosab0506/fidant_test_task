@@ -54,7 +54,6 @@ export function dateKeyInTz(offsetDays: number, tz?: string): string {
   const d = new Date();
   d.setDate(d.getDate() - offsetDays);
   if (!tz) return d.toISOString().slice(0, 10);
-  // Use Intl to format the date in the target timezone
   return d.toLocaleDateString("en-CA", { timeZone: tz }); // en-CA gives YYYY-MM-DD
 }
 
@@ -69,4 +68,22 @@ export function isValidTimezone(tz: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Build a Cache-Control header value based on whether the period includes today.
+ *
+ * - Includes today: private, 2-min TTL + stale-while-revalidate — data is live.
+ *   Must be `private` since the response is user-specific.
+ * - Pure historical: public, 1-hour TTL — data won't change.
+ */
+export function buildCacheControl(days: number, tz?: string): string {
+  const today = dateKeyInTz(0, tz);
+  const from = dateKeyInTz(days - 1, tz);
+  const includesTODAY = from <= today;
+
+  if (includesTODAY) {
+    return "private, max-age=120, stale-while-revalidate=60";
+  }
+  return "public, max-age=3600";
 }
