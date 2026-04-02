@@ -1,4 +1,5 @@
 import UsageStats from "@/components/UsageStats";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function Home() {
   // In a real app, userId would come from the authenticated session.
@@ -16,7 +17,9 @@ export default function Home() {
         padding: 24,
       }}
     >
-      <UsageStats userId={demoUserId} initialDays={7} />
+      <ErrorBoundary>
+        <UsageStats userId={demoUserId} initialDays={7} />
+      </ErrorBoundary>
     </main>
   );
 }
