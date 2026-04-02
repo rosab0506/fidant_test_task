@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  ReferenceLine,
   TooltipProps,
 } from "recharts";
 
@@ -57,14 +58,19 @@ function barColor(utilization: number): string {
 
 function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
+  const committed = payload.find((p) => p.dataKey === "committed")?.value ?? 0;
+  const reserved = payload.find((p) => p.dataKey === "reserved")?.value ?? 0;
+  const total = (committed as number) + (reserved as number);
   return (
     <div style={tooltipStyle}>
-      <p style={{ margin: "0 0 6px", fontWeight: 600, color: "#e2e8f0" }}>{formatDate(label as string)}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ margin: "2px 0", fontSize: 12, color: p.name === "committed" ? "#818cf8" : "#94a3b8" }}>
-          {p.name === "committed" ? "Committed" : "Reserved"}: {p.value}
-        </p>
-      ))}
+      <p style={{ margin: "0 0 8px", fontWeight: 600, color: "#e2e8f0" }}>{formatDate(label as string)}</p>
+      <p style={{ margin: "2px 0", fontSize: 12, color: "#818cf8" }}>Committed: {committed}</p>
+      {(reserved as number) > 0 && (
+        <p style={{ margin: "2px 0", fontSize: 12, color: "#475569" }}>Reserved: {reserved}</p>
+      )}
+      <p style={{ margin: "6px 0 0", fontSize: 11, color: "#64748b", borderTop: "1px solid #1e293b", paddingTop: 6 }}>
+        Total: {total}
+      </p>
     </div>
   );
 }
@@ -201,9 +207,14 @@ export default function UsageStats({ userId, initialDays = 7 }: Props) {
 
       {/* Chart */}
       <div style={{ marginTop: 28 }}>
-        <p style={{ ...labelStyle, marginBottom: 12 }}>Daily committed turns</p>
+        <p style={{ ...labelStyle, marginBottom: 12 }}>Daily turns — committed + reserved (stacked)</p>
         <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={data.days} barCategoryGap="30%" margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
+          <BarChart
+            data={data.days}
+            barCategoryGap="30%"
+            margin={{ top: 4, right: 0, left: -28, bottom: 0 }}
+            stackOffset="none"
+          >
             <XAxis
               dataKey="date"
               tickFormatter={formatDate}
@@ -217,17 +228,26 @@ export default function UsageStats({ userId, initialDays = 7 }: Props) {
               tickLine={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-            <Bar dataKey="committed" radius={[4, 4, 0, 0]}>
+            <ReferenceLine
+              y={data.daily_limit}
+              stroke="#ef4444"
+              strokeDasharray="4 2"
+              strokeOpacity={0.6}
+              label={{ value: "limit", fontSize: 9, fill: "#ef4444", position: "insideTopRight" }}
+            />
+            {/* committed — bottom segment, color-coded by utilization */}
+            <Bar dataKey="committed" stackId="turns" radius={[0, 0, 0, 0]}>
               {data.days.map((d: DayStats) => (
                 <Cell key={d.date} fill={barColor(d.utilization)} />
               ))}
             </Bar>
-            <Bar dataKey="reserved" radius={[4, 4, 0, 0]} fill="#1e293b" />
+            {/* reserved — top segment, always muted */}
+            <Bar dataKey="reserved" stackId="turns" fill="#334155" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
         <div style={legendStyle}>
           <LegendDot color="#818cf8" label="Committed" />
-          <LegendDot color="#1e293b" label="Reserved" />
+          <LegendDot color="#334155" label="Reserved (in-flight)" />
           <LegendDot color="#fb923c" label="≥70% limit" />
           <LegendDot color="#f87171" label="≥90% limit" />
         </div>
