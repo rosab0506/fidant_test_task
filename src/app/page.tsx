@@ -16,7 +16,7 @@ export default function Home() {
         padding: 24,
       }}
     >
-      <UsageStats userId={demoUserId} days={7} />
+      <UsageStats userId={demoUserId} initialDays={7} />
     </main>
   );
 }

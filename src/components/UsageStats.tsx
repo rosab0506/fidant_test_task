@@ -35,8 +35,12 @@ interface UsageStatsData {
 
 interface Props {
   userId: number;
-  days?: number;
+  /** Initial days window. The user can change it via the selector. Default: 7 */
+  initialDays?: number;
 }
+
+const DAY_OPTIONS = [7, 14, 30, 90] as const;
+type DayOption = (typeof DAY_OPTIONS)[number];
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
@@ -65,7 +69,10 @@ function CustomTooltip({ active, payload, label }: TooltipProps<number, string>)
   );
 }
 
-export default function UsageStats({ userId, days = 7 }: Props) {
+export default function UsageStats({ userId, initialDays = 7 }: Props) {
+  const [days, setDays] = useState<DayOption>(
+    DAY_OPTIONS.includes(initialDays as DayOption) ? (initialDays as DayOption) : 7
+  );
   const [data, setData] = useState<UsageStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +80,9 @@ export default function UsageStats({ userId, days = 7 }: Props) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/usage/stats?days=${days}`, {
+    // Detect user's local timezone and pass it to the API
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    fetch(`/api/usage/stats?days=${days}&tz=${encodeURIComponent(tz)}`, {
       headers: { "x-user-id": String(userId) },
     })
       .then(async (res) => {
@@ -120,7 +129,25 @@ export default function UsageStats({ userId, days = 7 }: Props) {
             {formatDate(data.period.from)} — {formatDate(data.period.to)}
           </h1>
         </div>
-        <span style={planBadgeStyle}>{data.plan}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Days selector */}
+          <div style={selectorStyle} role="group" aria-label="Select time range">
+            {DAY_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => setDays(opt)}
+                aria-pressed={days === opt}
+                style={{
+                  ...selectorBtnStyle,
+                  ...(days === opt ? selectorBtnActiveStyle : {}),
+                }}
+              >
+                {opt}d
+              </button>
+            ))}
+          </div>
+          <span style={planBadgeStyle}>{data.plan}</span>
+        </div>
       </div>
 
       {/* Today's progress */}
@@ -351,4 +378,30 @@ const tooltipStyle: React.CSSProperties = {
   borderRadius: 8,
   padding: "10px 14px",
   fontSize: 13,
+};
+
+const selectorStyle: React.CSSProperties = {
+  display: "flex",
+  background: "#0a0f1e",
+  border: "1px solid #1e293b",
+  borderRadius: 8,
+  padding: 3,
+  gap: 2,
+};
+
+const selectorBtnStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  borderRadius: 6,
+  color: "#475569",
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 600,
+  padding: "4px 10px",
+  transition: "background 0.15s, color 0.15s",
+};
+
+const selectorBtnActiveStyle: React.CSSProperties = {
+  background: "#1e293b",
+  color: "#e2e8f0",
 };
