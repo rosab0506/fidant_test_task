@@ -1,10 +1,14 @@
 import { prisma } from "./prisma";
+import {
+  PLAN_LIMITS,
+  isCacheStale,
+  staleThreshold,
+  calcStreak,
+  calcUtilization,
+  calcAvgDaily,
+} from "./utils";
 
-export const PLAN_LIMITS: Record<string, number> = {
-  starter: 30,
-  pro: 100,
-  executive: 500,
-};
+export { PLAN_LIMITS };
 
 export interface DayStats {
   date: string;
@@ -35,20 +39,7 @@ function dateKey(offsetDays: number): string {
 }
 
 /** Stale reservation threshold: 15 minutes ago */
-function staleThreshold(): Date {
-  return new Date(Date.now() - 15 * 60 * 1000);
-}
-
-/**
- * Cache staleness thresholds:
- * - Today's cache: stale after 2 minutes (data changes frequently)
- * - Past days: stale after 1 hour (data is mostly stable)
- */
-function isCacheStale(calculatedAt: Date, isToday: boolean): boolean {
-  const ageMs = Date.now() - calculatedAt.getTime();
-  const threshold = isToday ? 2 * 60 * 1000 : 60 * 60 * 1000;
-  return ageMs > threshold;
-}
+// imported from utils
 
 /** Compute raw aggregates for a single day directly from events */
 async function computeDayFromEvents(
@@ -119,21 +110,12 @@ async function getDayStats(
     committed,
     reserved,
     limit,
-    utilization: limit > 0 ? Math.round((committed / limit) * 100) / 100 : 0,
+    utilization: calcUtilization(committed, limit),
   };
 }
 
 /** Calculate current streak: consecutive days (ending today) with at least 1 committed event */
-function calcStreak(days: DayStats[]): number {
-  // days is ordered newest-first from our loop; sort ascending for streak calc
-  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date));
-  let streak = 0;
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].committed > 0) streak++;
-    else break;
-  }
-  return streak;
-}
+// imported from utils
 
 export async function getUserUsageStats(
   userId: number,
@@ -156,7 +138,7 @@ export async function getUserUsageStats(
   );
 
   const totalCommitted = dayStats.reduce((sum, d) => sum + d.committed, 0);
-  const avgDaily = days > 0 ? Math.round((totalCommitted / days) * 10) / 10 : 0;
+  const avgDaily = calcAvgDaily(totalCommitted, days);
 
   const peakDay = dayStats.reduce(
     (best, d) => (d.committed > best.count ? { date: d.date, count: d.committed } : best),
