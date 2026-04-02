@@ -6,6 +6,7 @@ import {
   calcStreak,
   calcUtilization,
   calcAvgDaily,
+  dateKeyInTz,
 } from "./utils";
 
 export { PLAN_LIMITS };
@@ -32,11 +33,7 @@ export interface UsageStats {
 }
 
 /** ISO date string "YYYY-MM-DD" for a given offset from today */
-function dateKey(offsetDays: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - offsetDays);
-  return d.toISOString().slice(0, 10);
-}
+// replaced by dateKeyInTz from utils — see below
 
 /** Stale reservation threshold: 15 minutes ago */
 // imported from utils
@@ -83,10 +80,10 @@ async function upsertCache(
 async function getDayStats(
   userId: number,
   dk: string,
-  limit: number
+  limit: number,
+  todayKey: string
 ): Promise<DayStats> {
-  const today = dateKey(0);
-  const isToday = dk === today;
+  const isToday = dk === todayKey;
 
   const cached = await prisma.daily_usage_cache.findUnique({
     where: { user_id_date_key: { user_id: userId, date_key: dk } },
@@ -120,21 +117,22 @@ async function getDayStats(
 export async function getUserUsageStats(
   userId: number,
   planTier: string,
-  days: number
+  days: number,
+  tz?: string
 ): Promise<UsageStats> {
   const limit = PLAN_LIMITS[planTier] ?? PLAN_LIMITS.starter;
-  const toDate = dateKey(0);
-  const fromDate = dateKey(days - 1);
+  const toDate = dateKeyInTz(0, tz);
+  const fromDate = dateKeyInTz(days - 1, tz);
 
-  // Build date keys for the period
+  // Build date keys for the period in the user's timezone
   const dateKeys: string[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    dateKeys.push(dateKey(i));
+    dateKeys.push(dateKeyInTz(i, tz));
   }
 
-  // Fetch all days in parallel
+  // Fetch all days in parallel, passing todayKey so getDayStats doesn't recompute it
   const dayStats = await Promise.all(
-    dateKeys.map((dk) => getDayStats(userId, dk, limit))
+    dateKeys.map((dk) => getDayStats(userId, dk, limit, toDate))
   );
 
   const totalCommitted = dayStats.reduce((sum, d) => sum + d.committed, 0);

@@ -45,3 +45,28 @@ export function calcUtilization(committed: number, limit: number): number {
 export function calcAvgDaily(totalCommitted: number, days: number): number {
   return days > 0 ? Math.round((totalCommitted / days) * 10) / 10 : 0;
 }
+
+/**
+ * Returns "YYYY-MM-DD" for a given date offset (0 = today) in the specified timezone.
+ * Falls back to UTC if tz is undefined.
+ */
+export function dateKeyInTz(offsetDays: number, tz?: string): string {
+  const d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  if (!tz) return d.toISOString().slice(0, 10);
+  // Use Intl to format the date in the target timezone
+  return d.toLocaleDateString("en-CA", { timeZone: tz }); // en-CA gives YYYY-MM-DD
+}
+
+/**
+ * Validates a timezone string using the Intl API.
+ * Returns true if the timezone is recognized, false otherwise.
+ */
+export function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, errorResponse } from "@/lib/auth";
 import { getUserUsageStats } from "@/lib/usage";
+import { isValidTimezone } from "@/lib/utils";
 
 const DEFAULT_DAYS = 7;
 const MIN_DAYS = 1;
@@ -28,7 +29,18 @@ export async function GET(req: NextRequest) {
     days = parsed;
   }
 
-  // 3. Compute and return stats
-  const stats = await getUserUsageStats(user.id, user.plan_tier, days);
+  // 3. Validate optional `tz` query param (e.g. "America/New_York")
+  const tzParam = req.nextUrl.searchParams.get("tz");
+  let tz: string | undefined;
+
+  if (tzParam !== null) {
+    if (!isValidTimezone(tzParam)) {
+      return errorResponse(400, `Invalid timezone: "${tzParam}". Use an IANA timezone name (e.g. "America/New_York")`);
+    }
+    tz = tzParam;
+  }
+
+  // 4. Compute and return stats
+  const stats = await getUserUsageStats(user.id, user.plan_tier, days, tz);
   return Response.json(stats);
 }

@@ -6,6 +6,8 @@ import {
   calcStreak,
   calcUtilization,
   calcAvgDaily,
+  dateKeyInTz,
+  isValidTimezone,
 } from "../utils";
 import type { DayStats } from "../usage";
 
@@ -168,5 +170,60 @@ describe("calcAvgDaily", () => {
 
   it("returns exact value when evenly divisible", () => {
     expect(calcAvgDaily(30, 3)).toBe(10);
+  });
+});
+
+// ─── isValidTimezone ──────────────────────────────────────────────────────────
+
+describe("isValidTimezone", () => {
+  it("accepts valid IANA timezone names", () => {
+    expect(isValidTimezone("America/New_York")).toBe(true);
+    expect(isValidTimezone("Europe/London")).toBe(true);
+    expect(isValidTimezone("Asia/Tokyo")).toBe(true);
+    expect(isValidTimezone("UTC")).toBe(true);
+  });
+
+  it("rejects invalid timezone strings", () => {
+    expect(isValidTimezone("Not/ATimezone")).toBe(false);
+    expect(isValidTimezone("")).toBe(false);
+    expect(isValidTimezone("random string")).toBe(false);
+  });
+});
+
+// ─── dateKeyInTz ─────────────────────────────────────────────────────────────
+
+describe("dateKeyInTz", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("returns YYYY-MM-DD format", () => {
+    vi.setSystemTime(new Date("2026-04-02T12:00:00Z"));
+    const key = dateKeyInTz(0);
+    expect(key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("returns UTC date when no timezone given", () => {
+    vi.setSystemTime(new Date("2026-04-02T12:00:00Z"));
+    expect(dateKeyInTz(0)).toBe("2026-04-02");
+  });
+
+  it("returns correct date for offset days", () => {
+    vi.setSystemTime(new Date("2026-04-02T12:00:00Z"));
+    expect(dateKeyInTz(1)).toBe("2026-04-01");
+    expect(dateKeyInTz(2)).toBe("2026-03-31");
+  });
+
+  it("respects timezone when date differs from UTC", () => {
+    // At 01:00 UTC on Apr 2, it's still Apr 1 in New York (UTC-4 in EDT)
+    vi.setSystemTime(new Date("2026-04-02T01:00:00Z"));
+    expect(dateKeyInTz(0, "America/New_York")).toBe("2026-04-01");
+    expect(dateKeyInTz(0, "UTC")).toBe("2026-04-02");
+  });
+
+  it("respects timezone ahead of UTC", () => {
+    // At 23:00 UTC on Apr 1, it's already Apr 2 in Tokyo (UTC+9)
+    vi.setSystemTime(new Date("2026-04-01T23:00:00Z"));
+    expect(dateKeyInTz(0, "Asia/Tokyo")).toBe("2026-04-02");
+    expect(dateKeyInTz(0, "UTC")).toBe("2026-04-01");
   });
 });
